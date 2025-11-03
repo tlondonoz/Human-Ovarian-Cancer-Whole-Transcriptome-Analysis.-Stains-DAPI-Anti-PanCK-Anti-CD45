@@ -1,0 +1,63 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import sys
+import numpy as np
+
+# Cargar la base de datos procesada
+df_final = pd.read_parquet('df_final_procesado.parquet')
+
+# Anotaciones y Colores
+labels_unicos = sorted(df_final['Cluster'].unique())
+colores_paleta_original = sns.color_palette('husl', n_colors=len(labels_unicos))
+cluster_colors = {label: color for label, color in zip(labels_unicos, colores_paleta_original)}
+
+cluster_annotation_map = {
+    1: "Tumor - Tipo A", 2: "Tumor - Tipo B", 3: "Estroma Infiltrante",
+    4: "Células Inmunes", 5: "Tumor - Baja Energía", 6: "Tumor - Hiper-metabólico",
+    7: "Estroma Activo (A2M+)", 8: "Borde del Tejido (A2M+)"
+}
+
+# Encontrar los genes más variables
+metadata_cols = ['Cluster', 'x_coord', 'y_coord', 'A2M_log1p', 'MT-CO2_log1p']
+gene_columns = [col for col in df_final.columns if col not in metadata_cols and '_log1p' not in col]
+
+gene_variances = df_final[gene_columns].var()
+top_50_variable_genes = gene_variances.nlargest(50).index.tolist()
+
+if 'A2M' not in top_50_variable_genes: top_50_variable_genes.append('A2M')
+if 'MT-CO2' not in top_50_variable_genes: top_50_variable_genes.append('MT-CO2')
+
+# Preparar la matriz para el Heatmap
+df_avg_exp = df_final.groupby('Cluster')[top_50_variable_genes].mean()
+df_avg_exp.index = df_avg_exp.index.map(lambda c: f"Clúster {c}\n({cluster_annotation_map[c]})")
+
+# Generar Clustermap
+
+col_colors_map = df_avg_exp.index.str.split('\n').str[0].map(lambda c: cluster_colors[int(c.split(' ')[1])])
+
+g = sns.clustermap(
+    df_avg_exp.T,
+    z_score=0,
+    cmap='vlag',
+    figsize=(12, 18),
+    row_cluster=True,
+    col_cluster=True,
+    col_colors=col_colors_map,
+    yticklabels=True,
+    xticklabels=True
+)
+
+# Estética y Títulos
+g.fig.suptitle('Clustermap de Genes Variables por Clúster',
+              fontsize=18,
+              fontweight='bold',
+              color='#2C3E50',
+              y=1.03)
+g.ax_heatmap.set_ylabel(f'{len(top_50_variable_genes)} Genes Marcadores', fontsize=14)
+g.ax_heatmap.set_xlabel('Tipos Celulares (Anotados)', fontsize=14)
+
+plt.setp(g.ax_heatmap.get_xticklabels(), rotation=45, ha='right')
+
+plt.savefig('grafico_CLUSTERMAP_final.png', dpi=300, bbox_inches='tight')
+plt.show()
