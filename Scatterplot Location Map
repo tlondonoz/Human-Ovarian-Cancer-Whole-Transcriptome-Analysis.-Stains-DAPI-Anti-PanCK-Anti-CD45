@@ -1,0 +1,71 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import sys
+import matplotlib.patches as mpatches
+
+# Cargar la base de datos procesada
+df_final = pd.read_parquet('df_final_procesado.parquet')
+
+# Anotación de Clústeres
+cluster_annotation_map = {
+    1: "Tumor - Tipo A",
+    2: "Tumor - Tipo B",
+    3: "Estroma Infiltrante",
+    4: "Células Inmunes (Infiltrado)",
+    5: "Tumor - Baja Energía",
+    6: "Tumor - Hiper-metabólico",
+    7: "Estroma Activo (A2M+)",
+    8: "Borde del Tejido (A2M+)"
+}
+
+# Generar Scatterplot Espacial Anotado
+plt.figure(figsize=(12, 12))
+
+labels_unicos = sorted(df_final['Cluster'].unique())
+colores_paleta_original = sns.color_palette('husl', n_colors=len(labels_unicos))
+
+sns.scatterplot(data=df_final,
+                x='x_coord',
+                y='y_coord',
+                hue='Cluster',
+                palette=colores_paleta_original,
+                s=25,
+                linewidth=0.5,
+                edgecolor='white',
+                alpha=0.8,
+                legend=False)
+
+# Estética y Títulos
+plt.title('Mapa Espacial Anotado de Tipos Celulares',
+          fontsize=18,
+          fontweight='bold',
+          color='#2C3E50')
+plt.xlabel('Coordenada X del Tejido', fontsize=14, color='#34495E')
+plt.ylabel('Coordenada Y del Tejido', fontsize=14, color='#34495E')
+
+plt.gca().set_aspect('equal', adjustable='box')
+plt.gca().set_facecolor('#F0F0F0')
+
+# Leyenda manual con anotaciones
+handles = []
+for i, cluster_num in enumerate(labels_unicos):
+    cluster_name = cluster_annotation_map.get(cluster_num, f"Clúster {cluster_num}")
+    full_label = f"Clúster {cluster_num} ({cluster_name})"
+    
+    patch = mpatches.Patch(color=colores_paleta_original[i], label=full_label)
+    handles.append(patch)
+
+plt.legend(handles=handles,
+           title='Tipos Celulares (Anotados)',
+           bbox_to_anchor=(1.02, 1),
+           loc='upper left',
+           borderaxespad=0.,
+           fontsize=9,
+           title_fontsize=12)
+
+# Guardar y mostrar
+plt.tight_layout(rect=[0, 0, 0.88, 1])
+plt.savefig('grafico_scatterplot_espacial_ANOTADO_husl.png', dpi=300)
+plt.show()
+
