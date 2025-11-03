@@ -1,0 +1,63 @@
+import pandas as pd
+import scipy.io
+import sys
+
+# Iniciar el análisis y cargar datos
+print("Iniciando análisis de Transcriptómica Espacial (Visium)...")
+
+# --- 1.1 Cargar Datos Numéricos (Expresión) ---
+print("Cargando Matriz de Expresión...")
+matrix = scipy.io.mmread('matrix.mtx')
+features = pd.read_csv('features.tsv', sep='\t', header=None, names=['gene_id', 'gene_name', 'type'])
+barcodes = pd.read_csv('barcodes.tsv', sep='\t', header=None, names=['Barcode'])
+
+# Ensamblar el DataFrame de expresión
+print("Ensamblando DataFrame...")
+if features['gene_name'].duplicated().any():
+    features['unique_name'] = features['gene_name'].where(
+        ~features['gene_name'].duplicated(keep=False),
+        features['gene_name'] + '_' + features['gene_id']
+    )
+else:
+    features['unique_name'] = features['gene_name']
+    
+df_exp = pd.DataFrame.sparse.from_spmatrix(
+    matrix,
+    index=features['unique_name'],
+    columns=barcodes['Barcode']
+).transpose()
+print(f"Matriz de expresión cargada. {df_exp.shape[0]} spots y {df_exp.shape[1]} genes.")
+
+# --- 1.2 Cargar Clústeres ---
+print("Cargando Clústeres (clusters.csv)...")
+df_clusters = pd.read_csv('clusters.csv').set_index('Barcode')
+print(f"Clústeres cargados. {len(df_clusters)} spots.")
+
+# --- 1.3 Cargar Coordenadas Espaciales ---
+print("Cargando Coordenadas Espaciales (tissue_positions_list.csv)...")
+df_spatial = pd.read_csv('tissue_positions_list.csv', header=None,
+                         usecols=[0, 4, 5],
+                         names=['Barcode', 'x_coord', 'y_coord']).set_index('Barcode')
+print(f"Coordenadas cargadas. {len(df_spatial)} spots.")
+
+# --- 1.4 Fusionar DataFrames ---
+print("Fusionando los DataFrames...")
+df_merged = pd.merge(df_exp, df_clusters, left_index=True, right_index=True, how='inner')
+df_final = pd.merge(df_merged, df_spatial, left_index=True, right_index=True, how='inner')
+
+# Limpieza final
+df_final['Cluster'] = df_final['Cluster'].astype('category')
+print(f"\nDataFrame final ('df_final') listo con {len(df_final)} spots.")
+
+# --- 1.5 Guardar en disco (Manejo de columnas sparse) ---
+print("Convirtiendo columnas dispersas (sparse) a densas (dense) antes de guardar...")
+
+# Conversión de columnas sparse a dense
+for col in df_final.columns:
+    if pd.api.types.is_sparse(df_final[col]):
+        df_final[col] = df_final[col].sparse.to_dense()
+
+print("Guardando 'df_final' en 'df_final_procesado.parquet'...")
+df_final.to_parquet('df_final_procesado.parquet')
+
+print("\nProceso completado. La base de datos 'df_final_procesado.parquet' ha sido creada.")
