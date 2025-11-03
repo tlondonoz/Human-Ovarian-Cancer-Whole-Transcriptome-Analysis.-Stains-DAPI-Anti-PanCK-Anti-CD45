@@ -1,0 +1,112 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import sys
+import numpy as np
+import matplotlib.patches as mpatches
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
+
+# Cargar la base de datos procesada
+df_final = pd.read_parquet('df_final_procesado.parquet')
+
+# Definir Gen y Transformación Logarítmica
+gen_1 = 'A2M'
+gen_1_log = f"{gen_1}_log1p"
+df_final[gen_1_log] = np.log1p(df_final[gen_1])
+
+# Diccionario de Anotación de Tejidos
+cluster_annotation_map = {
+    1: "Tumor - Tipo A",
+    2: "Tumor - Tipo B",
+    3: "Estroma Infiltrante",
+    4: "Células Inmunes (Infiltrado)",
+    5: "Tumor - Baja Energía",
+    6: "Tumor - Hiper-metabólico",
+    7: "Estroma Activo (A2M+)",
+    8: "Borde del Tejido (A2M+)"
+}
+
+# Generar JointGrid Superpuesto
+
+# (a) Inicializar el JointGrid
+g = sns.JointGrid(data=df_final,
+                  x='x_coord',
+                  y='y_coord',
+                  height=11,
+                  ratio=6)
+
+# (b) CAPA BASE: Heatmap de A2M (Gris)
+sns.kdeplot(data=df_final,
+            x='x_coord',
+            y='y_coord',
+            weights=gen_1_log,
+            cmap='Greys',
+            fill=True,
+            levels=10,
+            alpha=0.7,
+            ax=g.ax_joint)
+
+# (c) CAPA SUPERIOR: Scatter de Clústeres (Color)
+labels_unicos = sorted(df_final['Cluster'].unique())
+colores_paleta_original = sns.color_palette('husl', n_colors=len(labels_unicos))
+
+sns.scatterplot(data=df_final,
+                x='x_coord',
+                y='y_coord',
+                hue='Cluster',
+                palette=colores_paleta_original,
+                s=8,
+                linewidth=0.5,
+                edgecolor='white',
+                alpha=0.8,
+                legend=False,
+                ax=g.ax_joint)
+
+# (d) Gráficos Marginales
+sns.histplot(data=df_final, x='x_coord', ax=g.ax_marg_x, color='grey', bins=100)
+sns.histplot(data=df_final, y='y_coord', ax=g.ax_marg_y, color='grey', bins=100)
+
+# Estética y Títulos
+g.fig.suptitle(f'Validación: Clústeres (Color) sobre Expresión {gen_1} (Gris)',
+              fontsize=18,
+              fontweight='bold',
+              color='#2C3E50',
+              y=0.99)
+g.set_axis_labels('Coordenada X del Tejido', 'Coordenada Y del Tejido', fontsize=14)
+g.ax_joint.set_aspect('equal', adjustable='box')
+
+# Leyendas Separadas y Posicionadas
+
+# (a) Leyenda de los Clústeres
+handles = []
+for i, cluster_num in enumerate(labels_unicos):
+    cluster_name = cluster_annotation_map.get(cluster_num, f"Clúster {cluster_num}")
+    full_label = f"Clúster {cluster_num} ({cluster_name})"
+    patch = mpatches.Patch(color=colores_paleta_original[i], label=full_label)
+    handles.append(patch)
+
+g.fig.legend(handles=handles,
+             title='Tipos Celulares (Anotados)',
+             bbox_to_anchor=(0.8, 0.75),
+             loc='upper left',
+             frameon=True,
+             fontsize=9,
+             title_fontsize=12)
+
+# (b) Barra de color (Heatmap Gris)
+norm = Normalize(vmin=0, vmax=df_final[gen_1_log].max())
+sm = ScalarMappable(cmap='Greys', norm=norm)
+sm.set_array([])
+
+cbar_ax = g.fig.add_axes([0.89, 0.3, 0.02, 0.20])
+cbar = g.fig.colorbar(sm, cax=cbar_ax)
+cbar.set_label(f'Expresión {gen_1}',
+              fontsize=11,
+              rotation=270,
+              labelpad=20)
+
+# Guardar y mostrar
+plt.tight_layout(rect=[0, 0, 0.87, 0.95])
+plt.savefig('grafico_KDEplot_ANOTADO.png', dpi=300)
+plt.show()
