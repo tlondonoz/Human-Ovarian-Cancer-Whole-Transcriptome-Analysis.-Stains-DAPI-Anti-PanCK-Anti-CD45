@@ -1,0 +1,81 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import sys
+import numpy as np
+import matplotlib.patches as mpatches
+
+# Cargar la base de datos procesada
+df_final = pd.read_parquet('df_final_procesado.parquet')
+
+# Definir genes, anotaciones y colores
+gen_1 = 'A2M'
+gen_2 = 'MT-CO2'
+
+cluster_annotation_map = {
+    1: "Tumor - Tipo A",
+    2: "Tumor - Tipo B",
+    3: "Estroma Infiltrante",
+    4: "Células Inmunes (Infiltrado)",
+    5: "Tumor - Baja Energía",
+    6: "Tumor - Hiper-metabólico",
+    7: "Estroma Activo (A2M+)",
+    8: "Borde del Tejido (A2M+)"
+}
+
+labels_totales = sorted(df_final['Cluster'].unique())
+colores_totales = sns.color_palette('husl', n_colors=len(labels_totales))
+paleta_dict = {label: color for label, color in zip(labels_totales, colores_totales)}
+
+# Transformación logarítmica
+gen_1_log = f"{gen_1}_log1p"
+gen_2_log = f"{gen_2}_log1p"
+df_final[gen_1_log] = np.log1p(df_final[gen_1])
+df_final[gen_2_log] = np.log1p(df_final[gen_2])
+
+# Filtrar el DataFrame
+clusters_de_interes = [7, 8]
+df_filtrado = df_final[df_final['Cluster'].isin(clusters_de_interes)].copy()
+
+# Generar lmplot (Enfocado)
+
+g = sns.lmplot(data=df_filtrado,
+               x=gen_1_log,
+               y=gen_2_log,
+               hue='Cluster',
+               palette=paleta_dict,
+               height=8,
+               aspect=1.1,
+               legend=False,
+               scatter_kws={'s': 20, 'alpha': 0.4})
+
+# Estética y Títulos
+g.ax.set_title(f'Correlación {gen_1} vs. {gen_2} (Solo Clústeres 7 y 8)',
+              fontsize=18,
+              fontweight='bold',
+              color='#2C3E50')
+g.ax.set_xlabel(f'Expresión de {gen_1} (log(UMI + 1))', fontsize=14, color='#34495E')
+g.ax.set_ylabel(f'Expresión de {gen_2} (log(UMI + 1))', fontsize=14, color='#34495E')
+g.ax.grid(True, linestyle='--', alpha=0.7)
+
+# Leyenda manual (Solo para los clústeres filtrados)
+handles = []
+for cluster_num in clusters_de_interes:
+    cluster_name = cluster_annotation_map.get(cluster_num)
+    full_label = f"Clúster {cluster_num} ({cluster_name})"
+    color = paleta_dict.get(cluster_num)
+    patch = mpatches.Patch(color=color, label=full_label)
+    handles.append(patch)
+
+g.ax.legend(handles=handles,
+            title='Tipos Celulares (Anotados)',
+            bbox_to_anchor=(1.02, 1),
+            loc='upper left',
+            borderaxespad=0.,
+            fontsize=10,
+            title_fontsize=12)
+
+# Guardar y mostrar
+plt.tight_layout(rect=[0, 0, 0.88, 1])
+plt.savefig('grafico_novedoso_4_lmplot_correlacion_FILTRADO.png', dpi=300)
+plt.show()
